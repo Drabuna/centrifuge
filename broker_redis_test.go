@@ -58,10 +58,11 @@ func NewTestRedisBrokerWithPrefix(tb testing.TB, n *Node, prefix string, useStre
 	s, err := NewRedisShard(n, redisConf)
 	require.NoError(tb, err)
 	e, err := NewRedisBroker(n, RedisBrokerConfig{
-		Prefix:         prefix,
-		UseLists:       !useStreams,
-		HistoryMetaTTL: 3600 * time.Second,
-		Shards:         []*RedisShard{s},
+		Prefix:               prefix,
+		UseLists:             !useStreams,
+		HistoryMetaTTL:       3600 * time.Second,
+		Shards:               []*RedisShard{s},
+		NumPubSubSubscribers: 0,
 	})
 	require.NoError(tb, err)
 	n.SetBroker(e)
@@ -838,10 +839,10 @@ func TestRedisPubSubTwoNodes(t *testing.T) {
 	prefix := getUniquePrefix()
 
 	e1, _ := NewRedisBroker(node1, RedisBrokerConfig{
-		Prefix:           prefix,
-		Shards:           []*RedisShard{s},
-		NumPubSubShards:  4,
-		NumPubSubWorkers: 2,
+		Prefix:               prefix,
+		Shards:               []*RedisShard{s},
+		NumPubSubSubscribers: 4,
+		NumPubSubProcessors:  2,
 	})
 
 	msgNum := 10
@@ -1184,7 +1185,7 @@ func BenchmarkRedisSubscribe(b *testing.B) {
 			e := newTestRedisBroker(b, node, false, tt.UseCluster)
 			defer func() { _ = node.Shutdown(context.Background()) }()
 			i := int32(0)
-			b.SetParallelism(128)
+			b.SetParallelism(1024)
 			b.ResetTimer()
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1379,28 +1380,19 @@ func BenchmarkRedisHistoryIteration(b *testing.B) {
 }
 
 type throughputTest struct {
-	NumPubSubShards  int
-	NumPubSubWorkers int
+	NumPubSubShards      int
+	NumPubSubSubscribers int
+	NumPubSubProcessors  int
 }
 
 var throughputTests = []throughputTest{
-	{1, 1},
-	{1, 2},
-	{1, 4},
-	{1, 8},
-	{2, 1},
-	{2, 2},
-	{2, 4},
-	{2, 8},
-	{4, 1},
-	{4, 2},
-	{4, 4},
-	{4, 8},
+	{2, 1, 1},
+	//{2, 1, 1},
 }
 
 func BenchmarkPubSubThroughput(b *testing.B) {
 	for _, tt := range throughputTests {
-		b.Run(fmt.Sprintf("%dsh_%dwrk", tt.NumPubSubShards, tt.NumPubSubWorkers), func(b *testing.B) {
+		b.Run(fmt.Sprintf("%dsh_%dsub_%dproc", tt.NumPubSubShards, tt.NumPubSubSubscribers, tt.NumPubSubProcessors), func(b *testing.B) {
 			redisConf := testRedisConf()
 
 			node1, _ := New(Config{})
@@ -1411,10 +1403,10 @@ func BenchmarkPubSubThroughput(b *testing.B) {
 			prefix := getUniquePrefix()
 
 			e1, _ := NewRedisBroker(node1, RedisBrokerConfig{
-				Prefix:           prefix,
-				Shards:           []*RedisShard{s},
-				NumPubSubShards:  tt.NumPubSubShards,
-				NumPubSubWorkers: tt.NumPubSubWorkers,
+				Prefix:               prefix,
+				Shards:               []*RedisShard{s},
+				NumPubSubSubscribers: tt.NumPubSubSubscribers,
+				NumPubSubProcessors:  tt.NumPubSubProcessors,
 			})
 
 			numChannels := 1024
@@ -1447,7 +1439,7 @@ func BenchmarkPubSubThroughput(b *testing.B) {
 			defer func() { _ = node2.Shutdown(context.Background()) }()
 
 			b.ReportAllocs()
-			b.SetParallelism(128)
+			b.SetParallelism(1024)
 			b.ResetTimer()
 			var i int64
 			b.RunParallel(func(pb *testing.PB) {
