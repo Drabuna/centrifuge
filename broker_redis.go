@@ -153,6 +153,9 @@ func NewRedisBroker(n *Node, config RedisBrokerConfig) (*RedisBroker, error) {
 
 	if config.NumPubSubSubscribers == 0 {
 		config.NumPubSubSubscribers = runtime.NumCPU()
+		if config.NumPubSubShards > 0 {
+			config.NumPubSubSubscribers /= config.NumPubSubShards
+		}
 		if config.NumClusterShards > 0 {
 			config.NumPubSubSubscribers /= config.NumClusterShards
 		}
@@ -537,14 +540,17 @@ func (b *RedisBroker) runControlPubSub(s *RedisShard, eventHandler BrokerEventHa
 
 func (b *RedisBroker) runPubSub(s *shardWrapper, eventHandler BrokerEventHandler, clusterShardIndex, psShardIndex int, useShardedPubSub bool) {
 	numProcessors := runtime.NumCPU()
+	if b.config.NumPubSubShards > 0 {
+		numProcessors /= b.config.NumPubSubShards
+	}
 	if b.config.NumClusterShards > 0 {
 		numProcessors /= b.config.NumClusterShards
 	}
-	if b.config.NumPubSubProcessors > 0 {
-		numProcessors = b.config.NumPubSubProcessors
-	}
 	if numProcessors < 1 {
 		numProcessors = 1
+	}
+	if b.config.NumPubSubProcessors > 0 {
+		numProcessors = b.config.NumPubSubProcessors
 	}
 
 	numSubscribers := b.config.NumPubSubSubscribers

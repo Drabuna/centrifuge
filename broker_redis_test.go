@@ -58,11 +58,10 @@ func NewTestRedisBrokerWithPrefix(tb testing.TB, n *Node, prefix string, useStre
 	s, err := NewRedisShard(n, redisConf)
 	require.NoError(tb, err)
 	e, err := NewRedisBroker(n, RedisBrokerConfig{
-		Prefix:               prefix,
-		UseLists:             !useStreams,
-		HistoryMetaTTL:       3600 * time.Second,
-		Shards:               []*RedisShard{s},
-		NumPubSubSubscribers: 0,
+		Prefix:         prefix,
+		UseLists:       !useStreams,
+		HistoryMetaTTL: 3600 * time.Second,
+		Shards:         []*RedisShard{s},
 	})
 	require.NoError(tb, err)
 	n.SetBroker(e)
@@ -1386,8 +1385,9 @@ type throughputTest struct {
 }
 
 var throughputTests = []throughputTest{
-	{2, 1, 1},
-	//{2, 1, 1},
+	{1, 0, 0},
+	{2, 0, 0},
+	{4, 0, 0},
 }
 
 func BenchmarkPubSubThroughput(b *testing.B) {
@@ -1405,6 +1405,7 @@ func BenchmarkPubSubThroughput(b *testing.B) {
 			e1, _ := NewRedisBroker(node1, RedisBrokerConfig{
 				Prefix:               prefix,
 				Shards:               []*RedisShard{s},
+				NumPubSubShards:      tt.NumPubSubShards,
 				NumPubSubSubscribers: tt.NumPubSubSubscribers,
 				NumPubSubProcessors:  tt.NumPubSubProcessors,
 			})
