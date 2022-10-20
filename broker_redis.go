@@ -110,14 +110,13 @@ type RedisBrokerConfig struct {
 	NumPubSubShards int
 
 	// NumPubSubSubscribers defines how many subscriber goroutines will be used by
-	// Centrifuge for each PUB/SUB shard.
-	// Zero value tells Centrifuge to use:
-	// runtime.NumCPU / NumPubSubShards / NumClusterShards (if used) subscribers (minimum 1).
+	// Centrifuge for each PUB/SUB shard. Zero value tells Centrifuge to use 16
+	// subscriber goroutines per PUB/SUB shard.
 	NumPubSubSubscribers int
 
 	// NumPubSubProcessors allows configuring number of workers which will process messages
-	// coming from Redis PUB/SUB. Zero value tells Centrifuge to use:
-	// runtime.NumCPU / NumPubSubShards / NumClusterShards (if used) processors (minimum 1).
+	// coming from Redis PUB/SUB. Zero value tells Centrifuge to use the number calculated as
+	// runtime.NumCPU / NumPubSubShards / NumClusterShards (if used) (minimum 1).
 	NumPubSubProcessors int
 
 	// NumClusterShards when greater than zero allows turning on a mode when broker
@@ -152,15 +151,16 @@ func NewRedisBroker(n *Node, config RedisBrokerConfig) (*RedisBroker, error) {
 	}
 
 	if config.NumPubSubSubscribers == 0 {
-		config.NumPubSubSubscribers = runtime.NumCPU()
-		if config.NumPubSubShards > 0 {
-			config.NumPubSubSubscribers /= config.NumPubSubShards
-		}
+		config.NumPubSubSubscribers = 16
+	}
+
+	if config.NumPubSubProcessors == 0 {
+		config.NumPubSubProcessors = runtime.NumCPU() / config.NumPubSubShards
 		if config.NumClusterShards > 0 {
-			config.NumPubSubSubscribers /= config.NumClusterShards
+			config.NumPubSubProcessors /= config.NumClusterShards
 		}
-		if config.NumPubSubSubscribers < 1 {
-			config.NumPubSubSubscribers = 1
+		if config.NumPubSubProcessors < 1 {
+			config.NumPubSubProcessors = 1
 		}
 	}
 
@@ -539,27 +539,15 @@ func (b *RedisBroker) runControlPubSub(s *RedisShard, eventHandler BrokerEventHa
 }
 
 func (b *RedisBroker) runPubSub(s *shardWrapper, eventHandler BrokerEventHandler, clusterShardIndex, psShardIndex int, useShardedPubSub bool) {
-	numProcessors := runtime.NumCPU()
-	if b.config.NumPubSubShards > 0 {
-		numProcessors /= b.config.NumPubSubShards
-	}
-	if b.config.NumClusterShards > 0 {
-		numProcessors /= b.config.NumClusterShards
-	}
-	if numProcessors < 1 {
-		numProcessors = 1
-	}
-	if b.config.NumPubSubProcessors > 0 {
-		numProcessors = b.config.NumPubSubProcessors
-	}
-
+	numProcessors := b.config.NumPubSubProcessors
 	numSubscribers := b.config.NumPubSubSubscribers
 
 	if b.node.LogEnabled(LogLevelDebug) {
 		logValues := map[string]interface{}{
-			"shard":          s.shard.string(),
-			"numProcessors":  numProcessors,
-			"numSubscribers": numSubscribers,
+			"shard":            s.shard.string(),
+			"numProcessors":    numProcessors,
+			"numSubscribers":   numSubscribers,
+			"pubSubShardIndex": psShardIndex,
 		}
 		if useShardedPubSub {
 			logValues["clusterShardIndex"] = clusterShardIndex
@@ -726,7 +714,11 @@ func (b *RedisBroker) runPubSub(s *shardWrapper, eventHandler BrokerEventHandler
 
 		go func(subscriberIndex int) {
 			channels := b.node.Hub().Channels()
-			chIDs := make([]channelID, 0, len(channels)/b.config.NumPubSubSubscribers)
+			estimatedCap := len(channels) / b.config.NumPubSubSubscribers / b.config.NumPubSubShards
+			if useShardedPubSub {
+				estimatedCap /= b.config.NumClusterShards
+			}
+			chIDs := make([]channelID, 0, estimatedCap)
 
 			for _, ch := range channels {
 				if b.getShard(ch).shard == s.shard && ((useShardedPubSub && consistentIndex(ch, b.config.NumClusterShards) == clusterShardIndex && index(ch, b.config.NumPubSubShards) == psShardIndex && index(ch, b.config.NumPubSubSubscribers) == subscriberIndex) || (index(ch, b.config.NumPubSubShards) == psShardIndex && index(ch, b.config.NumPubSubSubscribers) == subscriberIndex)) {

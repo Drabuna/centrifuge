@@ -1184,7 +1184,7 @@ func BenchmarkRedisSubscribe(b *testing.B) {
 			e := newTestRedisBroker(b, node, false, tt.UseCluster)
 			defer func() { _ = node.Shutdown(context.Background()) }()
 			i := int32(0)
-			b.SetParallelism(1024)
+			b.SetParallelism(128)
 			b.ResetTimer()
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1440,7 +1440,7 @@ func BenchmarkPubSubThroughput(b *testing.B) {
 			defer func() { _ = node2.Shutdown(context.Background()) }()
 
 			b.ReportAllocs()
-			b.SetParallelism(1024)
+			b.SetParallelism(128)
 			b.ResetTimer()
 			var i int64
 			b.RunParallel(func(pb *testing.PB) {
