@@ -106,18 +106,18 @@ type RedisBrokerConfig struct {
 	UseLists bool
 
 	// NumPubSubShards defines how many PUB/SUB shards will be used by Centrifuge.
-	// Each PUB/SUB shard uses dedicated connection to Redis.
-	// Zero value means 1.
+	// Each PUB/SUB shard uses dedicated connection to Redis. Zero value means 1.
 	NumPubSubShards int
 
-	// NumPubSubSubscribers defines how many subscriber goroutines will be used by Centrifuge
-	// for each PUB/SUB shard.
-	// Zero value tells Centrifuge to use runtime.NumCPU / NumPubSubShards subscribers (minimum 1).
+	// NumPubSubSubscribers defines how many subscriber goroutines will be used by
+	// Centrifuge for each PUB/SUB shard.
+	// Zero value tells Centrifuge to use:
+	// runtime.NumCPU / NumPubSubShards / NumClusterShards (if used) subscribers (minimum 1).
 	NumPubSubSubscribers int
 
 	// NumPubSubProcessors allows configuring number of workers which will process messages
-	// coming from Redis PUB/SUB. Zero value tells Centrifuge to use runtime.NumCPU / NumPubSubShards
-	// workers (minimum 1).
+	// coming from Redis PUB/SUB. Zero value tells Centrifuge to use:
+	// runtime.NumCPU / NumPubSubShards / NumClusterShards (if used) processors (minimum 1).
 	NumPubSubProcessors int
 
 	// NumClusterShards when greater than zero allows turning on a mode when broker
