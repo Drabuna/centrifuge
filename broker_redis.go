@@ -210,7 +210,7 @@ func NewRedisBroker(n *Node, config RedisBrokerConfig) (*RedisBroker, error) {
 		for i := 0; i < len(subChannels); i++ {
 			for j := 0; j < b.config.NumPubSubShards; j++ {
 				for k := 0; k < b.config.NumPubSubSubscribers; k++ {
-					subChannels[i][j] = append(subChannels[i][j], make(chan subRequest, 0))
+					subChannels[i][j] = append(subChannels[i][j], make(chan subRequest))
 				}
 			}
 		}
